@@ -15,6 +15,9 @@ if _G.URDU_CLOCK_TIMER_RUNNING == nil then
 _G.URDU_CLOCK_TIMER_RUNNING = false
 end
 
+-- ***** نیا مضبوط تالا *****
+local announceLock = false
+
 -- آواز تلاش کرنے کیلئے متعدد راستے
 local function findAudio(fileName)
   local luaDir = tostring(context.getLuaDir()).."/"
@@ -43,7 +46,7 @@ local function findAudio(fileName)
   return nil
 end
 
--- آواز چلانے کا فنکشن
+-- آواز چلانے کا فنکشن (کوئی تبدیلی نہیں)
 local function playAudio(fileName, callback)
 
   local finalPath = findAudio(fileName)
@@ -74,8 +77,11 @@ end
 -- مین ٹائم فنکشن
 function main()
 
-  if isSpeaking then return end
+  -- ***** مضبوط ڈبل چیک *****
+  if isSpeaking or announceLock then return end
+  
   isSpeaking = true
+  announceLock = true  -- تالا لگا دیا
 
   local cal = Calendar.getInstance()
   local min = cal.get(Calendar.MINUTE)
@@ -96,6 +102,7 @@ function main()
     if min == 0 then
       playAudio("h"..hour,function()
         isSpeaking=false
+        announceLock=false  -- ***** تالا کھولا *****
         if wakeLock.isHeld() then wakeLock.release() end
       end)
 
@@ -104,6 +111,7 @@ function main()
 
         playAudio("m"..min,function()
           isSpeaking=false
+          announceLock=false  -- ***** تالا کھولا *****
           if wakeLock.isHeld() then wakeLock.release() end
         end)
 
@@ -134,7 +142,8 @@ local function startAutoTimer()
       local cal = Calendar.getInstance()
       local min = cal.get(Calendar.MINUTE)
 
-      if (min == 0 or min == 30) then
+      -- ***** announceLock کا چیک بھی شامل *****
+      if not announceLock and (min == 0 or min == 30) then
         if min ~= lastAutoMinute then
           lastAutoMinute = min
           main()
