@@ -105,7 +105,7 @@ function main()
   return true
 end
 
--- آٹو ٹائمر (ڈبلنگ اور گونج سے پاک تالا)
+-- آٹو ٹائمر (جیشو آن آف بگ فکس کے ساتھ)
 local function startAutoTimer()
   -- اگر پورے سسٹم میں ایک بار ٹائمر چل گیا تو دوسرا کبھی نہیں بنے گا
   if _G.URDU_CLOCK_TIMER_RUNNING then return end
@@ -114,6 +114,11 @@ local function startAutoTimer()
   local handler = Handler(Looper.getMainLooper())
   local runnable
   
+  -- جیشو آن آف ہونے پر پرانے ہینڈلر کے کچرے کو صاف کرنا تاکہ ملٹی پل لوپس نہ بنیں
+  pcall(function()
+    handler.removeCallbacksAndMessages(nil)
+  end)
+
   runnable = Runnable({
     run=function()
       local cal = Calendar.getInstance()
