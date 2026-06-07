@@ -8,18 +8,16 @@ import "java.io.File"
 
 local context = service or activity
 
--- گلوبل ویری ایبلز کا استعمال تاکہ ری لوڈ ہونے پر بھی ڈیٹا ضائع نہ ہو
 if _G.URDU_CLOCK_SPEAKING == nil then _G.URDU_CLOCK_SPEAKING = false end
 if _G.URDU_CLOCK_LAST_MIN == nil then _G.URDU_CLOCK_LAST_MIN = -1 end
-if _G.URDU_CLOCK_TIMER_RUNNING == nil then _G.URDU_CLOCK_TIMER_RUNNING = false end
 
--- آواز تلاش کرنے کا زبردست فنکشن (جو اب ہر نام اور فولڈر کو سپورٹ کرے گا)
 local function findAudio(fileName)
   local luaDir = tostring(context.getLuaDir()).."/"
   
-  -- تمام ممکنہ راستوں کی لسٹ
   local paths = {
-    luaDir, -- سب سے پہلے اس فولڈر کو چیک کرے گا جہاں پلگ ان انسٹال ہے (نام کا مسئلہ حل)
+    luaDir,
+    "/sdcard/解说/Plugins/Urdu Clock Final Pro/",
+    "/storage/emulated/0/解说/Plugins/Urdu Clock Final Pro/",
     "/sdcard/解说/Plugins/Urdu_Clock/",
     "/storage/emulated/0/解说/Plugins/Urdu_Clock/",
     "/sdcard/解说/Plugins/Urdu/",
@@ -41,7 +39,6 @@ local function findAudio(fileName)
   return nil
 end
 
--- آواز چلانے کا تیز ترین فنکشن
 local function playAudio(fileName, callback)
   local finalPath = findAudio(fileName)
 
@@ -68,7 +65,6 @@ local function playAudio(fileName, callback)
   end
 end
 
--- مین ٹائم فنکشن
 function main()
   if _G.URDU_CLOCK_SPEAKING then return true end
   _G.URDU_CLOCK_SPEAKING = true
@@ -77,7 +73,6 @@ function main()
   local min = cal.get(Calendar.MINUTE)
   local hour = cal.get(Calendar.HOUR_OF_DAY)
 
-  -- پاور مینجمنٹ (سکرین لاک میں 24 گھنٹے ورکنگ یقینی بنانے کے لیے)
   local pm = context.getSystemService(Context.POWER_SERVICE)
   local wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "UrduClock:WakeLock")
 
@@ -85,7 +80,6 @@ function main()
     wakeLock.acquire(15000)
   end
 
-  -- پلے لسٹ ترتیب: ککو -> گھنٹہ -> منٹ
   playAudio("Cuckoo", function()
     if min == 0 then
       playAudio("h"..hour, function()
@@ -105,44 +99,37 @@ function main()
   return true
 end
 
--- آٹو ٹائمر (جیشو آن آف بگ فکس کے ساتھ)
 local function startAutoTimer()
-  -- اگر پورے سسٹم میں ایک بار ٹائمر چل گیا تو دوسرا کبھی نہیں بنے گا
-  if _G.URDU_CLOCK_TIMER_RUNNING then return end
-  _G.URDU_CLOCK_TIMER_RUNNING = true
-
-  local handler = Handler(Looper.getMainLooper())
+  if _G.URDU_CLOCK_MAIN_HANDLER then
+    pcall(function()
+      _G.URDU_CLOCK_MAIN_HANDLER.removeCallbacksAndMessages(nil)
+    end)
+  end
+  
+  _G.URDU_CLOCK_MAIN_HANDLER = Handler(Looper.getMainLooper())
   local runnable
   
-  -- جیشو آن آف ہونے پر پرانے ہینڈلر کے کچرے کو صاف کرنا تاکہ ملٹی پل لوپس نہ بنیں
-  pcall(function()
-    handler.removeCallbacksAndMessages(nil)
-  end)
-
   runnable = Runnable({
     run=function()
       local cal = Calendar.getInstance()
       local min = cal.get(Calendar.MINUTE)
 
-      -- صرف 00 اور 30 منٹ پر چلے گا
       if (min == 0 or min == 30) then
         if min ~= _G.URDU_CLOCK_LAST_MIN and not _G.URDU_CLOCK_SPEAKING then
-          _G.URDU_CLOCK_LAST_MIN = min -- منٹ کو فوراً لاک کریں تاکہ دوبارہ لوپ نہ چلے
+          _G.URDU_CLOCK_LAST_MIN = min 
           main()
         end
       else
-        -- جب منٹ 00 یا 30 نہ ہو تو تالا کھول دیں تاکہ اگلے آدھے گھنٹے کے لیے تیار ہو جائے
         _G.URDU_CLOCK_LAST_MIN = -1
       end
 
-      handler.postDelayed(runnable, 2000) -- ہر 2 سیکنڈ بعد سمارٹ چیکنگ
+      _G.URDU_CLOCK_MAIN_HANDLER.postDelayed(runnable, 2000) 
     end
   })
 
-  handler.postDelayed(runnable, 1000)
+  _G.URDU_CLOCK_MAIN_HANDLER.postDelayed(runnable, 1000)
 end
 
--- پلگ ان رجسٹریشن اور سیٹ اپ
 pcall(function()
   startAutoTimer()
 
@@ -150,15 +137,13 @@ pcall(function()
     name="Urdu Clock Final Pro",
     id="urdu_clock_pro_janbaz",
     author="Janbaz Hijbani",
-    version="12.5", -- ورژن اپڈیٹ
+    version="13.0", 
     menus={
       {"Check Time", main}
     }
   })
 end)
 
--- جب آپ خود پلگ ان اپلائی کریں تو فوراً ٹائم بتائے گا
--- لیکن اگر اٹو ٹائمر کا وقت ہو تو یہ مینوئل رن اوور لیپ نہیں کرے گا
 local currentMin = Calendar.getInstance().get(Calendar.MINUTE)
 if currentMin ~= 0 and currentMin ~= 30 then
   main()
