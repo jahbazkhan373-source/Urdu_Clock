@@ -11,9 +11,13 @@ local context = service or activity
 if _G.URDU_CLOCK_SPEAKING == nil then _G.URDU_CLOCK_SPEAKING = false end
 if _G.URDU_CLOCK_LAST_MIN == nil then _G.URDU_CLOCK_LAST_MIN = -1 end
 
+-- ***** نئی سخت لاجک (Session ID) *****
+-- یہ لاجک پرانے بھوت ٹائمرز کو خود بخود مار دے گی
+local current_session_id = os.time()
+_G.URDU_CLOCK_SESSION_ID = current_session_id
+
 local function findAudio(fileName)
-  local luaDir = tostring(context.getLuaDir()).."/"
-  
+  local luaDir = tostring(context.getLuaDir()).."/"  
   local paths = {
     luaDir,
     "/sdcard/解说/Plugins/Urdu Clock Final Pro/",
@@ -22,12 +26,11 @@ local function findAudio(fileName)
     "/storage/emulated/0/解说/Plugins/Urdu_Clock/",
     "/sdcard/解说/Plugins/Urdu/",
     "/storage/emulated/0/解说/Plugins/Urdu/",
-    "/sdcard/Plugins/Urdu_Clock/",
+    "/sdcard/Plugins/Urdu_Clock/",    
     "/storage/emulated/0/Plugins/Urdu_Clock/",
-    "/sdcard/Urdu_Clock/",
+    "/sdcard/Urdu_Clock/",    
     "/storage/emulated/0/Urdu_Clock/"
   }
-
   for i=1,#paths do
     local p=paths[i]
     if File(p..fileName..".mp3").exists() then
@@ -41,14 +44,12 @@ end
 
 local function playAudio(fileName, callback)
   local finalPath = findAudio(fileName)
-
   if finalPath then
     local mp = MediaPlayer()
-    mp.setDataSource(finalPath)
+    mp.setDataSource(finalPath)    
     mp.setAudioStreamType(AudioManager.STREAM_MUSIC)
     mp.prepare()
     mp.start()
-
     mp.setOnCompletionListener(MediaPlayer.OnCompletionListener{
       onCompletion=function(m)
         m.release()
@@ -68,18 +69,14 @@ end
 function main()
   if _G.URDU_CLOCK_SPEAKING then return true end
   _G.URDU_CLOCK_SPEAKING = true
-
   local cal = Calendar.getInstance()
   local min = cal.get(Calendar.MINUTE)
   local hour = cal.get(Calendar.HOUR_OF_DAY)
-
   local pm = context.getSystemService(Context.POWER_SERVICE)
   local wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "UrduClock:WakeLock")
-
   if not wakeLock.isHeld() then
     wakeLock.acquire(15000)
   end
-
   playAudio("Cuckoo", function()
     if min == 0 then
       playAudio("h"..hour, function()
@@ -95,25 +92,22 @@ function main()
       end)
     end
   end)
-
   return true
 end
 
 local function startAutoTimer()
-  if _G.URDU_CLOCK_MAIN_HANDLER then
-    pcall(function()
-      _G.URDU_CLOCK_MAIN_HANDLER.removeCallbacksAndMessages(nil)
-    end)
-  end
-  
-  _G.URDU_CLOCK_MAIN_HANDLER = Handler(Looper.getMainLooper())
-  local runnable
-  
+  local handler = Handler(Looper.getMainLooper())
+  local runnable  
   runnable = Runnable({
     run=function()
+      -- ***** پرانے ٹائمرز کو کل کرنے والا لاک *****
+      -- اگر یہ سیشن آئی ڈی پرانی ہے، تو اس لوپ کو فوراً ختم کر دو
+      if _G.URDU_CLOCK_SESSION_ID ~= current_session_id then
+        return 
+      end
+
       local cal = Calendar.getInstance()
       local min = cal.get(Calendar.MINUTE)
-
       if (min == 0 or min == 30) then
         if min ~= _G.URDU_CLOCK_LAST_MIN and not _G.URDU_CLOCK_SPEAKING then
           _G.URDU_CLOCK_LAST_MIN = min 
@@ -122,22 +116,19 @@ local function startAutoTimer()
       else
         _G.URDU_CLOCK_LAST_MIN = -1
       end
-
-      _G.URDU_CLOCK_MAIN_HANDLER.postDelayed(runnable, 2000) 
+      handler.postDelayed(runnable, 2000) 
     end
   })
-
-  _G.URDU_CLOCK_MAIN_HANDLER.postDelayed(runnable, 1000)
+  handler.postDelayed(runnable, 1000)
 end
 
 pcall(function()
   startAutoTimer()
-
   plugin.register({
     name="Urdu Clock Final Pro",
     id="urdu_clock_pro_janbaz",
     author="Janbaz Hijbani",
-    version="13.0", 
+    version="13.1", 
     menus={
       {"Check Time", main}
     }
